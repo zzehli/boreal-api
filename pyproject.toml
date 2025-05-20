@@ -7,6 +7,7 @@ requires-python = ">=3.12, <3.13"
 dependencies = [
     "azure-identity>=1.23.0",
     "bs4>=0.0.2",
+    "crawl4ai>=0.6.3",
     "ipykernel>=6.29.5",
     "langchain-azure-ai>=0.1.2",
     "langchain-community>=0.3.24",
