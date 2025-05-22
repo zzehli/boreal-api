@@ -50,7 +50,7 @@ def load_documents(data_dir: str) -> List[Document]:
 
 def process_documents(
     documents: List[Document],
-    chunk_size: int = 1000,
+    chunk_size: int = 1200,
     chunk_overlap: int = 200
 ) -> List[LangchainDocument]:
     """Process documents by splitting them into chunks."""

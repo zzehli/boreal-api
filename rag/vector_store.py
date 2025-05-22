@@ -93,39 +93,27 @@ async def search_documents_semantic(
 async def search_documents_term_based(query: TermSearchQuery):
     """Search documents using the full-text search, no vectors involved."""
     # use azure search client to perform term-based search since langchain doesn't support it
-    search_client = SearchClient(
+    async with SearchClient(
         endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"), 
         credential= AzureKeyCredential(os.getenv("AZURE_SEARCH_KEY")), 
         index_name="nestle-rag"
-        )
+        ) as search_client:
 
-    results = await search_client.search(
-        search_text=query.query,
-        filter=query.filter,
-        search_fields=query.search_fields,
-        top=query.k,
-    )
-    return [
-        SearchResult(
-            document=Document(
-                content=doc.get("content", ""),
-                metadata=doc.get("metadata", {}) if isinstance(doc.get("metadata"), dict) else json.loads(doc.get("metadata", "{}")),
-                source_url=doc.get("source_url", ""),
-                category=doc.get("category", ""),
-            ),
-            score=float(doc["@search.score"])
+        results = await search_client.search(
+            search_text=query.query,
+            filter=query.filter,
+            search_fields=query.search_fields,
+            top=query.k,
         )
-        async for doc in results
-    ]
-
-# async def _aresults_to_documents(
-#     results: AsyncSearchItemPaged[Dict],
-# ) -> List[Tuple[Document, float]]:
-#     docs = [
-#         (
-#             _result_to_document(result),
-#             float(result["@search.score"]),
-#         )
-#         async for result in results
-#     ]
-#     return docs
+        return [
+            SearchResult(
+                document=Document(
+                    content=doc.get("content", ""),
+                    metadata=doc.get("metadata", {}) if isinstance(doc.get("metadata"), dict) else json.loads(doc.get("metadata", "{}")),
+                    source_url=doc.get("source_url", ""),
+                    category=doc.get("category", ""),
+                ),
+                score=float(doc["@search.score"])
+            )
+            async for doc in results
+        ]

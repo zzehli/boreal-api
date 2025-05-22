@@ -1,9 +1,9 @@
 """
 Database operations for the RAG backend.
 """
-from .document_store import load_documents, process_documents
-from .models import Document, SearchResult, TermSearchQuery, VectorSearchQuery
-from .vector_store import (
+from rag.document_store import load_documents, process_documents
+from rag.models import Document, SearchResult, TermSearchQuery, VectorSearchQuery
+from rag.vector_store import (
     initialize_vector_store,
     search_documents_semantic,
     search_documents_term_based,
