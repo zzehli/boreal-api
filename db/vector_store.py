@@ -2,6 +2,7 @@
 Vector store operations using Azure Search.
 """
 
+import json
 import os
 from typing import List
 
@@ -104,22 +105,17 @@ async def search_documents_term_based(query: TermSearchQuery):
         search_fields=query.search_fields,
         top=query.k,
     )
-    print("client results ------")
-    async for i in results:
-        print('results here -----------------')
-        print(i)
-        print(i.get("metadata"))
     return [
-        # SearchResult(
-        #     document=Document(
-        #         content=doc.page_content,
-        #         metadata=doc.metadata,
-        #         source_url=doc.metadata.get("source_url", ""),
-        #         category=doc.metadata.get("category", ""),
-        #     ),
-        #     score=score
-        # )
-        # for doc, score in results
+        SearchResult(
+            document=Document(
+                content=doc.get("content", ""),
+                metadata=doc.get("metadata", {}) if isinstance(doc.get("metadata"), dict) else json.loads(doc.get("metadata", "{}")),
+                source_url=doc.get("source_url", ""),
+                category=doc.get("category", ""),
+            ),
+            score=float(doc["@search.score"])
+        )
+        async for doc in results
     ]
 
 # async def _aresults_to_documents(
