@@ -5,6 +5,8 @@ Vector store operations using Azure Search.
 import os
 from typing import List
 
+from azure.core.credentials import AzureKeyCredential
+from azure.search.documents.aio import SearchClient
 from azure.search.documents.indexes.models import (
     SearchField,
     SearchFieldDataType,
@@ -13,7 +15,7 @@ from azure.search.documents.indexes.models import (
 from langchain_community.vectorstores import AzureSearch
 from langchain_openai import AzureOpenAIEmbeddings
 
-from .models import Document, SearchQuery, SearchResult
+from .models import Document, SearchResult, TermSearchQuery, VectorSearchQuery
 
 
 def initialize_vector_store(embeddings: AzureOpenAIEmbeddings) -> AzureSearch:
@@ -46,6 +48,7 @@ def initialize_vector_store(embeddings: AzureOpenAIEmbeddings) -> AzureSearch:
             name="category",
             type=SearchFieldDataType.String,
             searchable=True,
+            filterable=True,
         ),
         SearchField(
             name="source_url",
@@ -63,12 +66,12 @@ def initialize_vector_store(embeddings: AzureOpenAIEmbeddings) -> AzureSearch:
         fields=fields,
     )
 
-async def search_documents(
+async def search_documents_semantic(
     vector_store: AzureSearch,
-    query: SearchQuery
+    query: VectorSearchQuery
 ) -> List[SearchResult]:
     """Search documents using the vector store."""
-    results = await vector_store.ahybrid_search(
+    results = await vector_store.ahybrid_search_with_score(
         query=query.query,
         k=query.k,
     )
@@ -81,7 +84,52 @@ async def search_documents(
                 source_url=doc.metadata.get("source_url", ""),
                 category=doc.metadata.get("category", ""),
             ),
-            # score=0
+            score=score
         )
-        for doc in results
-    ] 
+        for doc, score in results
+    ]
+
+async def search_documents_term_based(query: TermSearchQuery):
+    """Search documents using the full-text search, no vectors involved."""
+    # use azure search client to perform term-based search since langchain doesn't support it
+    search_client = SearchClient(
+        endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"), 
+        credential= AzureKeyCredential(os.getenv("AZURE_SEARCH_KEY")), 
+        index_name="nestle-rag"
+        )
+
+    results = await search_client.search(
+        search_text=query.query,
+        filter=query.filter,
+        search_fields=query.search_fields,
+        top=query.k,
+    )
+    print("client results ------")
+    async for i in results:
+        print('results here -----------------')
+        print(i)
+        print(i.get("metadata"))
+    return [
+        # SearchResult(
+        #     document=Document(
+        #         content=doc.page_content,
+        #         metadata=doc.metadata,
+        #         source_url=doc.metadata.get("source_url", ""),
+        #         category=doc.metadata.get("category", ""),
+        #     ),
+        #     score=score
+        # )
+        # for doc, score in results
+    ]
+
+# async def _aresults_to_documents(
+#     results: AsyncSearchItemPaged[Dict],
+# ) -> List[Tuple[Document, float]]:
+#     docs = [
+#         (
+#             _result_to_document(result),
+#             float(result["@search.score"]),
+#         )
+#         async for result in results
+#     ]
+#     return docs
