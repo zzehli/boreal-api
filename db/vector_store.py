@@ -63,15 +63,14 @@ def initialize_vector_store(embeddings: AzureOpenAIEmbeddings) -> AzureSearch:
         fields=fields,
     )
 
-def search_documents(
+async def search_documents(
     vector_store: AzureSearch,
     query: SearchQuery
 ) -> List[SearchResult]:
     """Search documents using the vector store."""
-    results = vector_store.hybrid_search_with_relevance_scores(
+    results = await vector_store.ahybrid_search(
         query=query.query,
         k=query.k,
-        score_threshold=query.score_threshold,
     )
     
     return [
@@ -82,7 +81,7 @@ def search_documents(
                 source_url=doc.metadata.get("source_url", ""),
                 category=doc.metadata.get("category", ""),
             ),
-            score=score
+            # score=0
         )
-        for doc, score in results
+        for doc in results
     ] 

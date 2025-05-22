@@ -1,3 +1,5 @@
+import asyncio
+
 from dotenv import load_dotenv
 from langchain_openai import AzureOpenAIEmbeddings
 
@@ -12,7 +14,7 @@ from db import (
 load_dotenv()
 embed_model_name = "text-embedding-3-large"
 
-def main():
+async def main():
     embeddings = AzureOpenAIEmbeddings(model="text-embedding-3-large")
     vector_store = initialize_vector_store(embeddings)
 
@@ -25,12 +27,12 @@ def main():
     #     print(processed_docs[i])
     # print("--------------------------------")
 
-    # ls = vector_store.add_documents(processed_docs)
+    # ls = await vector_store.aadd_documents(processed_docs)
     # print(ls)
 
     # Search
-    query = SearchQuery(query="Nestlé", k=3, score_threshold=0)
-    results = search_documents(vector_store, query)
+    query = SearchQuery(query="ice cream", k=3, score_threshold=0)
+    results = await search_documents(vector_store, query)
     for i in range(len(results)):
         print("--------------------------------")
         print(results[i])
@@ -175,4 +177,4 @@ def main():
     # print(response["answer"])
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

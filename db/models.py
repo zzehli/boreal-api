@@ -17,7 +17,7 @@ class Document(BaseModel):
 class SearchResult(BaseModel):
     """Search result model containing document and relevance score."""
     document: Document
-    score: float = Field(..., description="Relevance score of the search result")
+    # score: float = Field(..., description="Relevance score of the search result")
     
 class SearchQuery(BaseModel):
     """Search query model."""
