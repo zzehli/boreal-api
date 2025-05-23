@@ -9,10 +9,9 @@ from langchain_community.document_loaders import TextLoader
 from langchain_core.documents import Document as LangchainDocument
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from utils.constants import Categories
-from utils.utils import Utils
-
-from .models import Document
+from app.rag.models import Document
+from app.utils.constants import Categories
+from app.utils.utils import Utils
 
 
 def get_category(file_path: str) -> str:
@@ -50,7 +49,7 @@ def load_documents(data_dir: str) -> List[Document]:
 
 def process_documents(
     documents: List[Document],
-    chunk_size: int = 1200,
+    chunk_size: int = 1500,
     chunk_overlap: int = 200
 ) -> List[LangchainDocument]:
     """Process documents by splitting them into chunks."""

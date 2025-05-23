@@ -16,7 +16,7 @@ from azure.search.documents.indexes.models import (
 from langchain_community.vectorstores import AzureSearch
 from langchain_openai import AzureOpenAIEmbeddings
 
-from .models import Document, SearchResult, TermSearchQuery, VectorSearchQuery
+from app.rag.models import Document, SearchResult, TermSearchQuery, VectorSearchQuery
 
 
 def initialize_vector_store(embeddings: AzureOpenAIEmbeddings) -> AzureSearch:
@@ -58,7 +58,6 @@ def initialize_vector_store(embeddings: AzureOpenAIEmbeddings) -> AzureSearch:
             searchable=True,
         ),
     ]
-    
     return AzureSearch(
         azure_search_endpoint=os.getenv("AZURE_SEARCH_ENDPOINT"),
         azure_search_key=os.getenv("AZURE_SEARCH_KEY"),
