@@ -1,12 +1,14 @@
 import asyncio
 import os
-from typing import Annotated, List, TypedDict
+from typing import Annotated, List, Optional, TypedDict
 
 from dotenv import load_dotenv
 from langchain import hub
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
+from langgraph.graph.state import CompiledStateGraph
 
 from app.rag import (
     Document,
@@ -41,7 +43,7 @@ class State(TypedDict):
 
 class RAGGraph:
     def __init__(self):
-        self.graph = self.create_graph()
+        self._graph: Optional[CompiledStateGraph] = None
 
     def _analyze_query(self, state: State):
         """Enrich the query, to be implemented."""
@@ -73,15 +75,16 @@ class RAGGraph:
         response = await llm.ainvoke(messages)
         return {"answer": response.content}
 
-    def create_graph(self):
+    def _create_graph(self) -> Optional[CompiledStateGraph]:
         graph_builder = StateGraph(State).add_sequence([self._analyze_query, self._retrieve, self._generate])
         graph_builder.add_edge(START, "_analyze_query")
-
-        return graph_builder.compile()
+        memory = MemorySaver()
+        return graph_builder.compile(checkpointer=memory)
     
-    async def get_response(self, question: str):
+    async def get_response(self, question: str, session_id: str):
+        if self._graph is None:
+            self._graph = self._create_graph()
         print(f"question: {question}")
-        response = await self.graph.ainvoke({"question": question})
+        config = {"configurable": {"thread_id": session_id}}
+        response = await self._graph.ainvoke({"question": question}, config=config)
         return response["answer"]
-
-

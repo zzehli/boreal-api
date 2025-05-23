@@ -11,5 +11,6 @@ wheels/
 .env
 notes.md
 temp.py
-data/
-utils/logs/
+app/data/
+app/utils/logs/
+app/api/v1/models.py
