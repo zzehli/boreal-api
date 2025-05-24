@@ -4,7 +4,8 @@ from typing import Annotated, List, Optional, TypedDict
 from dotenv import load_dotenv
 from IPython.display import Image, display
 from langchain import hub
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.runnables.config import RunnableConfig
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph
@@ -39,30 +40,31 @@ class Search(TypedDict):
 
     query: Annotated[str, ..., "Search query to run."]
 
-# Define prompt for question-answering
+# TODO: use a custom prompt
 prompt = hub.pull("rlm/rag-prompt")
 
 # Define state for application
 class State(TypedDict):
-    question: str
-    query: Search
-    context: List[Document]
-    answer: str
-    # messages: Annotated[list, add_messages]
-    step: str
+    question: str  # Current question text
+    messages: Annotated[list, add_messages]  # For conversation history
+
+    # Optional fields based on graph path
+    query: Optional[Search]
+    context: Optional[List[Document]]
+    # answer: Optional[str]  # Can be derived from the last AIMessage
+    step: Optional[Literal["rag", "chat"]]
 
 class RAGGraph:
     def __init__(self):
         self._graph: Optional[CompiledStateGraph] = None
+        self._config: Optional[RunnableConfig] = None
 
     def _router(self, state: State):
         """Route the user to rag or chat."""
         router = llm.with_structured_output(Route)
         decision = router.invoke(
             [
-                SystemMessage(content="""You are a customer agent for Nestle. Route the user input,
-                              determine if this question needs retrieval (RAG) from the database of Nestle's 
-                              website or if it can be answered by the chatbot based on the context provided (chat)."""),
+                SystemMessage(content="You are a customer agent for Nestle. Route the user input, determine if this question needs retrieval (RAG) from the database of Nestle's website or if it can be answered by the chatbot based on the context provided (chat)."),
                 HumanMessage(content=state["question"])
             ]
         )
@@ -93,27 +95,26 @@ class RAGGraph:
             full_text_query = TermSearchQuery(query="*", filter=filter_expression)
         
         retrieved_docs = await search_documents_term_based(full_text_query)
-        for doc in retrieved_docs:
-            print("--------------------------------")
-            print(doc)
         return {"context": retrieved_docs}
 
 
     async def _generate(self, state: State):
         docs_content = "\n\n".join(doc.document.content for doc in state["context"])
-        messages = prompt.invoke({"question": state["question"], "context": docs_content})
-        response = await llm.ainvoke(messages)
-        return {"answer": response.content}
+        prompt_value = prompt.invoke({"question": state["question"], "context": docs_content})
+        print(f"prompt_value: {prompt_value}")
+        response = await llm.ainvoke(prompt_value)
+        return {"messages": [AIMessage(content=response.content)]}
 
     async def _chat(self, state: State):
         """Chat with the user."""
-        response = llm.invoke(
+        state["messages"].extend(
             [
-                SystemMessage(content="""You are a customer agent for Nestle. Aswered customer's question based on the context provided. Ask clarification questions if needed."""),
+                SystemMessage(content="""You are a customer agent for Nestle. Answer customer's question based on the context provided. Ask clarification questions if needed."""),
                 HumanMessage(content=state["question"])
             ]
         )
-        return {"answer": response.content}
+        response = llm.invoke(state["messages"])
+        return {"messages": [AIMessage(content=response.content)]}
 
     def _create_graph(self) -> Optional[CompiledStateGraph]:
         graph_builder = StateGraph(State).add_sequence([self._analyze_query, self._retrieve, self._generate])
@@ -137,12 +138,16 @@ class RAGGraph:
         if self._graph is None:
             print("Creating graph")
             self._graph = self._create_graph()
-        print(f"question: {question}")
-        config = {"configurable": {"thread_id": session_id}}
-        print(config)
-        print(list(self._graph.get_state_history(config=config)))
-        response = await self._graph.ainvoke({"question": question}, config=config)
-        return response["answer"]
+            self._config = {"configurable": {"thread_id": session_id}}
+        # TODO:update state without invoke
+        response = await self._graph.ainvoke(
+            {"messages": [HumanMessage(content=question)], 
+             "question": question},
+            config=self._config)
+        
+        if response["messages"] and isinstance(response["messages"][-1], AIMessage):
+            return response["messages"][-1].content
+        return "No response generated"
     
     def draw_graph(self):
         if self._graph is None:
