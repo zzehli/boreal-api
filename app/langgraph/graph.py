@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from IPython.display import Image, display
 from langchain import hub
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables.config import RunnableConfig
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
 from langgraph.checkpoint.memory import InMemorySaver
@@ -64,7 +65,7 @@ class RAGGraph:
         router = llm.with_structured_output(Route)
         decision = router.invoke(
             [
-                SystemMessage(content="You are a customer agent for Nestle. Route the user input, determine if this question needs retrieval (RAG) from the database of Nestle's website or if it can be answered by the chatbot based on the context provided (chat)."),
+                SystemMessage(content="You are a customer agent for Nestlé. Route the user input, if the question is about Nestlé's company itself, products or services, choose RAG; otherwise, choose chat."),
                 HumanMessage(content=state["question"])
             ]
         )
@@ -78,10 +79,18 @@ class RAGGraph:
         else:
             return "chat"
     
-    def _analyze_query(self, state: State):
+    async def _analyze_query(self, state: State):
         """Enrich the query, to be implemented."""
-        query = VectorSearchQuery(query=state["question"], k=4, score_threshold=0)
-        return {"query": query}
+        state["messages"].extend(
+            [
+                SystemMessage(content="""You are query analyzer for a RAG application. If the user's question refers to previous conversations, reformulate the question to provide more specific information for information retrieval. Use the message history to disambiguate the question. If there is no ambiguity, return the original question."""),
+                HumanMessage(content=state["question"])
+            ]
+        )
+        response = await llm.ainvoke(state["messages"])
+        print(f"query analyzer response: {response}")
+        query = VectorSearchQuery(query=response.content, k=4, score_threshold=0)
+        return {"query": query, "question": response.content, "messages": [AIMessage(content=response.content)]}
 
     async def _retrieve(self, state: State):
         embeddings = AzureOpenAIEmbeddings(model=os.getenv("EMBEDDING_MODEL"))
@@ -100,20 +109,25 @@ class RAGGraph:
 
     async def _generate(self, state: State):
         docs_content = "\n\n".join(doc.document.content for doc in state["context"])
-        prompt_value = prompt.invoke({"question": state["question"], "context": docs_content})
-        print(f"prompt_value: {prompt_value}")
-        response = await llm.ainvoke(prompt_value)
+        template = ChatPromptTemplate([
+            ("system","You are a customer agent for Nestle. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise."),
+            ("human", "Context: {context}\n Question: {question}\n Answer:"),
+        ])
+
+        input = template.invoke({"question": state["question"], "context": docs_content})
+        state["messages"].extend(input.to_messages())
+        response = await llm.ainvoke(state["messages"])
         return {"messages": [AIMessage(content=response.content)]}
 
     async def _chat(self, state: State):
         """Chat with the user."""
         state["messages"].extend(
             [
-                SystemMessage(content="""You are a customer agent for Nestle. Answer customer's question based on the context provided. Ask clarification questions if needed."""),
+                SystemMessage(content="""You are a customer agent for Nestlé. Answer customer's question based on the context provided. Ask clarification questions to allow the user to provide more specific information for information retrieval. Ground your answer in the context provided."""),
                 HumanMessage(content=state["question"])
             ]
         )
-        response = llm.invoke(state["messages"])
+        response = await llm.ainvoke(state["messages"])
         return {"messages": [AIMessage(content=response.content)]}
 
     def _create_graph(self) -> Optional[CompiledStateGraph]:

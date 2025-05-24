@@ -10,7 +10,7 @@ wheels/
 .venv
 .env
 notes.md
-temp.py
+temp*.py
 app/data/
 app/utils/logs/
 app/api/v1/models.py
