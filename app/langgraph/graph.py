@@ -3,7 +3,6 @@ from typing import Annotated, List, Optional, TypedDict
 
 from dotenv import load_dotenv
 from IPython.display import Image, display
-from langchain import hub
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables.config import RunnableConfig
@@ -40,9 +39,6 @@ class Search(TypedDict):
     """Search query."""
 
     query: Annotated[str, ..., "Search query to run."]
-
-# TODO: use a custom prompt
-prompt = hub.pull("rlm/rag-prompt")
 
 # Define state for application
 class State(TypedDict):
@@ -81,13 +77,14 @@ class RAGGraph:
     
     async def _analyze_query(self, state: State):
         """Enrich the query, to be implemented."""
-        state["messages"].extend(
-            [
-                SystemMessage(content="""You are query analyzer for a RAG application. If the user's question refers to previous conversations, reformulate the question to provide more specific information for information retrieval. Use the message history to disambiguate the question. If there is no ambiguity, return the original question."""),
+        messages = [
+                *state["messages"],
+                SystemMessage(content="""You are a query analyzer for a RAG application. If the user's question refers to previous conversations, reformulate the question to provide more specific information for information retrieval. Use the message history to disambiguate the question. If there is no ambiguity, return the original question."""),
                 HumanMessage(content=state["question"])
-            ]
-        )
-        response = await llm.ainvoke(state["messages"])
+        ]
+
+
+        response = await llm.ainvoke(messages)
         print(f"query analyzer response: {response}")
         query = VectorSearchQuery(query=response.content, k=4, score_threshold=0)
         return {"query": query, "question": response.content, "messages": [AIMessage(content=response.content)]}
@@ -115,19 +112,22 @@ class RAGGraph:
         ])
 
         input = template.invoke({"question": state["question"], "context": docs_content})
-        state["messages"].extend(input.to_messages())
-        response = await llm.ainvoke(state["messages"])
+        messages = [
+            *state["messages"],
+            *input.to_messages()
+        ]
+        response = await llm.ainvoke(messages)
         return {"messages": [AIMessage(content=response.content)]}
 
     async def _chat(self, state: State):
         """Chat with the user."""
-        state["messages"].extend(
-            [
-                SystemMessage(content="""You are a customer agent for Nestlé. Answer customer's question based on the context provided. Ask clarification questions to allow the user to provide more specific information for information retrieval. Ground your answer in the context provided."""),
-                HumanMessage(content=state["question"])
-            ]
-        )
-        response = await llm.ainvoke(state["messages"])
+        messages = [
+            *state["messages"],
+            SystemMessage(content="You are a customer agent for Nestlé. Answer customer's question based on the context provided. Ask clarification questions to allow the user to provide more specific information for information retrieval. Ground your answer in the context provided."),
+            HumanMessage(content=state["question"])
+        ]
+        
+        response = await llm.ainvoke(messages)
         return {"messages": [AIMessage(content=response.content)]}
 
     def _create_graph(self) -> Optional[CompiledStateGraph]:
@@ -158,7 +158,8 @@ class RAGGraph:
             {"messages": [HumanMessage(content=question)], 
              "question": question},
             config=self._config)
-        
+        print(self._graph.get_state(config=self._config))
+
         if response["messages"] and isinstance(response["messages"][-1], AIMessage):
             return response["messages"][-1].content
         return "No response generated"
