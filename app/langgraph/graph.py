@@ -140,7 +140,7 @@ class RAGGraph:
         for ref in response.reference:
             ref.url = state["context"][ref.index].document.metadata.get("source_url")
         
-        print("response: ", response.model_dump_json())
+        print("new response: ", response.model_dump_json())
         # Return both the structured response and a formatted message
         return {
             "messages": [AIMessage(content=response.response)],  # Just the response text
@@ -156,7 +156,7 @@ class RAGGraph:
         ]
         
         response = await llm.ainvoke(messages)
-        return {"messages": [AIMessage(content=response.content)]}
+        return {"messages": [AIMessage(content=response.content)], "structured_response": None}
 
     def _create_graph(self) -> Optional[CompiledStateGraph]:
         graph_builder = StateGraph(State).add_sequence([self._analyze_query, self._retrieve, self._generate])
@@ -189,7 +189,7 @@ class RAGGraph:
             # Return both the message and structured data if available
             return {
                 "message": response["messages"][-1].content,
-                "references": response["structured_response"].reference
+                "references": response["structured_response"].reference if response["structured_response"] else []
             }
         return "No response generated"
     
