@@ -3,6 +3,7 @@ from typing import Annotated, List, Optional, TypedDict
 
 from dotenv import load_dotenv
 from IPython.display import Image, display
+from langchain.retrievers import ParentDocumentRetriever
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables.config import RunnableConfig
@@ -14,6 +15,12 @@ from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 from typing_extensions import Literal
 
+from app.langgraph.prompts import (
+    CHAT_SYSTEM_PROMPT,
+    GENERATION_SYSTEM_PROMPT,
+    QUERY_ANALYZER_SYSTEM_PROMPT,
+    ROUTER_SYSTEM_PROMPT,
+)
 from app.rag import (
     Document,
     TermSearchQuery,
@@ -35,6 +42,15 @@ class Route(BaseModel):
         None, description="The next step in the routing process"
     )
 
+class ReferenceItem(BaseModel):
+    index: int = Field(description="The index of the document in the context")
+    title: str = Field(description="The title or identifier of the document")
+    url: str = Field(description="The url of the document")
+
+class ResponseWithCitation(BaseModel):
+    response: str = Field(description="The response to user's question")
+    reference: List[ReferenceItem] = Field(description="A list of references from the context used to generate the response")
+
 class Search(TypedDict):
     """Search query."""
 
@@ -50,6 +66,7 @@ class State(TypedDict):
     context: Optional[List[Document]]
     # answer: Optional[str]  # Can be derived from the last AIMessage
     step: Optional[Literal["rag", "chat"]]
+    structured_response: Optional[ResponseWithCitation]  # Add this field
 
 class RAGGraph:
     def __init__(self):
@@ -61,7 +78,7 @@ class RAGGraph:
         router = llm.with_structured_output(Route)
         decision = router.invoke(
             [
-                SystemMessage(content="You are a customer agent for Nestlé. Route the user input, if the question is about Nestlé's company itself, products or services, choose RAG; otherwise, choose chat."),
+                SystemMessage(content=ROUTER_SYSTEM_PROMPT),
                 HumanMessage(content=state["question"])
             ]
         )
@@ -79,7 +96,7 @@ class RAGGraph:
         """Enrich the query, to be implemented."""
         messages = [
                 *state["messages"],
-                SystemMessage(content="""You are a query analyzer for a RAG application. If the user's question refers to previous conversations, reformulate the question to provide more specific information for information retrieval. Use the message history to disambiguate the question. If there is no ambiguity, return the original question."""),
+                SystemMessage(content=QUERY_ANALYZER_SYSTEM_PROMPT),
                 HumanMessage(content=state["question"])
         ]
 
@@ -105,9 +122,9 @@ class RAGGraph:
 
 
     async def _generate(self, state: State):
-        docs_content = "\n\n".join(doc.document.content for doc in state["context"])
+        docs_content = "\n\n".join(f"[{i}] {doc.document.content}" for i, doc in enumerate(state["context"]))
         template = ChatPromptTemplate([
-            ("system","You are a customer agent for Nestle. Use the following pieces of retrieved context to answer the question. If you don't know the answer, just say that you don't know. Use three sentences maximum and keep the answer concise."),
+            ("system", GENERATION_SYSTEM_PROMPT),
             ("human", "Context: {context}\n Question: {question}\n Answer:"),
         ])
 
@@ -116,14 +133,25 @@ class RAGGraph:
             *state["messages"],
             *input.to_messages()
         ]
-        response = await llm.ainvoke(messages)
-        return {"messages": [AIMessage(content=response.content)]}
+        
+        response = await llm.with_structured_output(ResponseWithCitation).ainvoke(messages)
+
+        # response.reference = [ReferenceItem(index=doc.document.metadata.get("index"), title=doc.document.metadata.get("title"), url=doc.document.metadata.get("source_url")) for doc in state["context"]]
+        for ref in response.reference:
+            ref.url = state["context"][ref.index].document.metadata.get("source_url")
+        
+        print("response: ", response.model_dump_json())
+        # Return both the structured response and a formatted message
+        return {
+            "messages": [AIMessage(content=response.response)],  # Just the response text
+            "structured_response": response  # Keep the full structured response
+        }
 
     async def _chat(self, state: State):
         """Chat with the user."""
         messages = [
             *state["messages"],
-            SystemMessage(content="You are a customer agent for Nestlé. Answer customer's question based on the context provided. Ask clarification questions to allow the user to provide more specific information for information retrieval. Ground your answer in the context provided."),
+            SystemMessage(content=CHAT_SYSTEM_PROMPT),
             HumanMessage(content=state["question"])
         ]
         
@@ -150,18 +178,19 @@ class RAGGraph:
     
     async def get_response(self, question: str, session_id: str):
         if self._graph is None:
-            print("Creating graph")
             self._graph = self._create_graph()
             self._config = {"configurable": {"thread_id": session_id}}
-        # TODO:update state without invoke
         response = await self._graph.ainvoke(
             {"messages": [HumanMessage(content=question)], 
              "question": question},
             config=self._config)
-        print(self._graph.get_state(config=self._config))
-
+        
         if response["messages"] and isinstance(response["messages"][-1], AIMessage):
-            return response["messages"][-1].content
+            # Return both the message and structured data if available
+            return {
+                "message": response["messages"][-1].content,
+                "references": response["structured_response"].reference
+            }
         return "No response generated"
     
     def draw_graph(self):
