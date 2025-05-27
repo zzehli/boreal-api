@@ -23,3 +23,12 @@ async def read_root(
     message = request.message
     response = await graph.get_response(message, chat_user_id)
     return response
+
+@api_router.get("/health")
+async def health_check():
+    """Health check endpoint.
+
+    Returns:
+        dict: Health status information.
+    """
+    return {"status": "healthy", "version": "1.0.0"}
