@@ -20,7 +20,6 @@ async def read_root(
     if not chat_user_id:
         chat_user_id = str(uuid.uuid4())
         response.set_cookie(key="chat_user_id", value=chat_user_id, max_age=60 * 60 * 24, samesite='strict')
-    print(f"chat_user_id: {chat_user_id}")
     message = request.message
     response = await graph.get_response(message, chat_user_id)
     return response

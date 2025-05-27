@@ -10,7 +10,7 @@ with open(CURRENT_DIR / "generation-prompt.txt", "r", encoding="utf-8") as f:
     generation_prompt = f.read()
 
 ROUTER_SYSTEM_PROMPT = """You are a customer agent for Nestlé. Route the user input, 
-if the question is about Nestlé's company itself, products or services, choose RAG; 
+if the question is about products, services, or Nestlé itself, choose RAG; 
 otherwise, choose chat."""
 
 QUERY_ANALYZER_SYSTEM_PROMPT = """You are a query analyzer for a RAG application. 

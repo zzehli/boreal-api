@@ -102,7 +102,6 @@ class RAGGraph:
 
 
         response = await llm.ainvoke(messages)
-        print(f"query analyzer response: {response}")
         query = VectorSearchQuery(query=response.content, k=4, score_threshold=0)
         return {"query": query, "question": response.content, "messages": [AIMessage(content=response.content)]}
 
@@ -140,7 +139,7 @@ class RAGGraph:
         for ref in response.reference:
             ref.url = state["context"][ref.index].document.metadata.get("source_url")
         
-        print("new response: ", response.model_dump_json())
+        # print("new response: ", response.model_dump_json())
         # Return both the structured response and a formatted message
         return {
             "messages": [AIMessage(content=response.response)],  # Just the response text
