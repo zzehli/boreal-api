@@ -24,4 +24,5 @@ dependencies = [
 dev = [
     "crawl4ai>=0.6.3",
     "fastapi-cli>=0.0.7",
+    "openevals>=0.1.0",
 ]
