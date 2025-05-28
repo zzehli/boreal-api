@@ -3,18 +3,8 @@ import os
 from typing import Annotated, List, Optional, TypedDict
 
 from dotenv import load_dotenv
-from IPython.display import Image, display
-from langchain.retrievers import ParentDocumentRetriever
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables.config import RunnableConfig
 from langchain_openai import AzureChatOpenAI, AzureOpenAIEmbeddings
-from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
-from langgraph.graph.state import CompiledStateGraph
-from pydantic import BaseModel, Field
-from typing_extensions import Literal
 
 from app.langgraph.prompts import (
     CHAT_SYSTEM_PROMPT,
@@ -64,23 +54,24 @@ async def retrieve_context(input: str):
 
     results = await search_documents_semantic(vector_store, query)
     return results
-    # source_urls = list(set(result.document.metadata.get("source_url") for result in results if result.document.metadata.get("source_url")))
-    
-    # if source_urls:
-    #     filter_expression = " or ".join([f"source_url eq '{url}'" for url in source_urls])
-    #     full_text_query = TermSearchQuery(query="*", filter=filter_expression)
-    
-    # retrieved_docs = await search_documents_term_based(full_text_query)
-    # return {"context": retrieved_docs}
 
-async def generate(results: List[Document], question: str):
-        source_urls = list(set(result.document.metadata.get("source_url") for result in results if result.document.metadata.get("source_url")))
+async def enrich_context(results: List[Document]):
+    source_urls = list(set(result.document.metadata.get("source_url") for result in results if result.document.metadata.get("source_url")))
+    if source_urls:
+        filter_expression = " or ".join([f"source_url eq '{url}'" for url in source_urls])
+        full_text_query = TermSearchQuery(query="*", filter=filter_expression)
+
+    retrieved_docs = await search_documents_term_based(full_text_query)
+    return retrieved_docs
+
+async def generate(retrieved_docs: List[Document], question: str):
+        # source_urls = list(set(result.document.metadata.get("source_url") for result in results if result.document.metadata.get("source_url")))
     
-        if source_urls:
-            filter_expression = " or ".join([f"source_url eq '{url}'" for url in source_urls])
-            full_text_query = TermSearchQuery(query="*", filter=filter_expression)
+        # if source_urls:
+        #     filter_expression = " or ".join([f"source_url eq '{url}'" for url in source_urls])
+        #     full_text_query = TermSearchQuery(query="*", filter=filter_expression)
         
-        retrieved_docs = await search_documents_term_based(full_text_query)
+        # retrieved_docs = await search_documents_term_based(full_text_query)
         docs_content = "\n\n".join(f"[{i}] {doc.document.content}" for i, doc in enumerate(retrieved_docs))
         template = ChatPromptTemplate([
             ("system", GENERATION_SYSTEM_PROMPT),
@@ -101,5 +92,7 @@ if __name__ == "__main__":
     for question in questions[:1]:
         results = asyncio.run(retrieve_context(question))
         print("retrieved results: ", results)
-        response = asyncio.run(generate(results, question))
+        enriched_results = asyncio.run(enrich_context(results))
+        print("enriched results: ", enriched_results)
+        response = asyncio.run(generate(enriched_results, question))
         print("response: ", response)

@@ -12,7 +12,7 @@ from openevals.prompts import (
     RAG_RETRIEVAL_RELEVANCE_PROMPT,
 )
 
-from app.eval.generate_data import generate, questions, retrieve_context
+from app.eval.generate_data import enrich_context, generate, questions, retrieve_context
 
 load_dotenv()
 
@@ -47,7 +47,9 @@ async def process_question(question: str) -> Dict:
     # Get context and generate response
     results = await retrieve_context(question)
     context = [result.document.content for result in results]
-    response = await generate(results, question)
+    enriched_results = await enrich_context(results)
+    enriched_context = [result.document.content for result in enriched_results]
+    response = await generate(enriched_results, question)
     
     # Run evaluations
     helpfulness_result = helpfulness_evaluator(
@@ -56,7 +58,7 @@ async def process_question(question: str) -> Dict:
     )
     
     groundedness_result = groundedness_evaluator(
-        context=context,
+        context=enriched_context,
         outputs=response,
     )
     
@@ -130,6 +132,7 @@ async def main():
     print(f"Retrieval: {percentages['retrieval']:.1f}%")
 
 def test_evaluation():
+    """testing the evaluation pipeline"""
     question = questions[0]
     print("question: ", question)
     results = asyncio.run(retrieve_context(question))
@@ -152,6 +155,40 @@ def test_evaluation():
     )
     print("retrieval_result: ", retrieval_result)
 
+async def run_groundedness_evaluation():
+    """only run the groundedness evaluation"""
+    question = questions
+    all_results = []
+    for q in question:
+        results = await retrieve_context(q)
+        enriched_results = await enrich_context(results)
+        enriched_context = [result.document.content for result in enriched_results]
+        response = await generate(enriched_results, q)
+        groundedness_result = groundedness_evaluator(
+        context=enriched_context,
+        outputs=response,
+        )
+        result = {
+            "question": q,
+            "response": response,
+            "groundedness_score": groundedness_result.get("score", None),
+            "groundedness_reasoning": groundedness_result.get("comment", ""),
+        }
+        all_results.append(result)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_filename = f"evaluation_results_{timestamp}.csv"
+    
+    with open(csv_filename, 'w', newline='') as csvfile:
+        fieldnames = ['question', 'response', 'groundedness_score', 'groundedness_reasoning']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(all_results)
+    num_true = 0
+    for result in all_results:
+        if result["groundedness_score"] == 1:
+            num_true += 1
+    print(f"Percentage of True scores: {num_true / len(all_results) * 100}%")
+
 if __name__ == "__main__":
     # test_evaluation()
-    asyncio.run(main())
+    asyncio.run(run_groundedness_evaluation())
