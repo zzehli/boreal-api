@@ -7,7 +7,7 @@ app = FastAPI()
 
 origins = [
     "http://localhost:5173",
-    "https://jaeli.space/"
+    "https://jaeli.space"
 ]
 
 app.add_middleware(
