@@ -21,6 +21,7 @@ from app.langgraph.prompts import (
     QUERY_ANALYZER_SYSTEM_PROMPT,
     ROUTER_SYSTEM_PROMPT,
 )
+from app.model.response import ResponseWithCitation
 from app.rag import (
     Document,
     TermSearchQuery,
@@ -41,16 +42,7 @@ class Route(BaseModel):
     step: Literal["rag", "chat"] = Field(
         None, description="The next step in the routing process"
     )
-
-class ReferenceItem(BaseModel):
-    index: int = Field(description="The index of the document in the context")
-    title: str = Field(description="The title or identifier of the document")
-    url: str = Field(description="The url of the document")
-
-class ResponseWithCitation(BaseModel):
-    response: str = Field(description="The response to user's question")
-    reference: List[ReferenceItem] = Field(description="A list of references from the context used to generate the response")
-
+    
 class Search(TypedDict):
     """Search query."""
 
