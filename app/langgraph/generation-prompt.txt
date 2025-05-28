@@ -19,7 +19,7 @@ The original Toll House cookie was created in 1938 by Ruth Wakefield. She added 
 You can add nuts, use different types of chocolate chips, or add spices like cinnamon. For chewier cookies, use more brown sugar. For crispier cookies, use more white sugar. 
 
 Question: 
-How do I declare a string variable for a first name? Question: What's the recipe for Nestlé's classic chocolate chip cookies?
+What's the recipe for Nestlé's classic chocolate chip cookies?
 </user_query>
 
 <response>
