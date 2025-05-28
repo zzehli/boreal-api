@@ -1,6 +1,38 @@
 # Boreal RAG API
+## Features
+- Implements an Agentic Retrieval-Augmented Generation system with Langgraph. The system decides between conversation (solicit clarifications) and information retrieval 
+- Use Azure AI search for hybrid retrieval; it combines BM25 (full-text search) and HNSW (vector search) with Reciprocal Rank Fusion (RRF) for optimal retrieval results 
+- Comprehensive evaluation using the RAG triad metrics (helpfulness, groundedness, retrieval relevance) with `openevals`
+- Deployed dedicated OpenAI o4 model and `text-embedding-3-large` embedding model with Azure AI foundry
+- Uses crawl4ai for memory aware, concurrent, llm optimized scraping
+- Production grade versioned APIs with FastAPI
+- Deployed on a Azure VM with Caddy reverse proxy
 
-# Eval
+For fronend features, check: https://github.com/zzehli/boreal-chat
+## Local Development
+The project use uv to manage packages. Pull the codebase and install the packages with
+```
+uv sync
+```
+Fill in the dot env file.
+Set the PYTHONPATH
+```
+export PYTHONPATH=$PWD
+```
+Run the service:
+```
+fastapi dev app/main.py
+```
+
+## Future Development
+- Implement and test different text chunking strategies and experiment with different chunking lengths
+- Experiment with different retrieval algorithm
+- Currently, the I implement an extra step to retrieve full web page based on retrieved segments, but the retrieved content are not pieced together. To optimize the retrieval process, incorporate langchain's `ParentDocument` retriever to automatically fetch the whole document. But the tradeoff is to use extra storage space to store whole documents
+- Integrate evaluation with graph proper. RN, the eval implements a separate pipeline to fit the `openeval` evaluators. More work can be done to integrate these eval with the api itself, so that the eval can be performed on operation data
+- Implement cron jobs to crawl source websites on schedule
+- Implement CICD pipeline to run eval and deployment on github push
+
+## Eval
 Score Percentages:
 Helpfulness: 92.3%
 Groundedness: 100%
