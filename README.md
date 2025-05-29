@@ -8,6 +8,8 @@
 - Production grade versioned APIs with FastAPI
 - Deployed on a Azure VM with Caddy reverse proxy
 
+This project will be taken down after 2 weeks. Check out a video demo instead: https://youtu.be/3W-RlFHLIeI
+
 For fronend features, check: https://github.com/zzehli/boreal-chat
 ## Local Development
 The project use uv to manage packages. Pull the codebase and install the packages with
